@@ -1,0 +1,214 @@
+/*
+ *
+ * DKM: Zur Dokumentation werden nur die Modifizierten Funktionen ausgedruckt.
+ *
+ */
+
+
+/*
+ *  Ok, this is the main fork-routine. It copies the system process
+ * information (task[nr]) and sets up the necessary registers. It
+ * also copies the data segment in its entirety.
+ */
+int do_fork(unsigned long clone_flags, unsigned long usp, struct pt_regs *regs)
+{
+	int nr;
+	int retval = -ENOMEM;
+	struct task_struct *p;
+	struct semaphore sem = MUTEX_LOCKED;
+/* DKM start */
+	struct dkm_struct *dkm;
+/* DKM end */
+
+	if(clone_flags & CLONE_PID)
+	{
+		/* This is only allowed from the boot up thread */
+		if(current->pid)
+			return -EPERM;
+	}
+	
+	current->vfork_sem = &sem;
+
+	p = alloc_task_struct();
+	if (!p)
+		goto fork_out;
+
+	*p = *current;
+
+	down(&current->mm->mmap_sem);
+	lock_kernel();
+
+	retval = -EAGAIN;
+	if (p->user) {
+		if (atomic_read(&p->user->count) >= p->rlim[RLIMIT_NPROC].rlim_cur)
+			goto bad_fork_free;
+		atomic_inc(&p->user->count);
+	}
+
+	{
+		struct task_struct **tslot;
+		tslot = find_empty_process();
+		if (!tslot)
+			goto bad_fork_cleanup_count;
+		p->tarray_ptr = tslot;
+		*tslot = p;
+		nr = tslot - &task[0];
+	}
+
+	if (p->exec_domain && p->exec_domain->module)
+		__MOD_INC_USE_COUNT(p->exec_domain->module);
+	if (p->binfmt && p->binfmt->module)
+		__MOD_INC_USE_COUNT(p->binfmt->module);
+
+	p->did_exec = 0;
+	p->swappable = 0;
+	p->state = TASK_UNINTERRUPTIBLE;
+
+	copy_flags(clone_flags, p);
+	p->pid = get_pid(clone_flags);
+
+	/*
+	 * This is a "shadow run" state. The process
+	 * is marked runnable, but isn't actually on
+	 * any run queue yet.. (that happens at the
+	 * very end).
+	 */
+	p->state = TASK_RUNNING;
+	p->next_run = p;
+	p->prev_run = p;
+
+	p->p_pptr = p->p_opptr = current;
+	p->p_cptr = NULL;
+	init_waitqueue(&p->wait_chldexit);
+	p->vfork_sem = NULL;
+
+	p->sigpending = 0;
+	sigemptyset(&p->signal);
+	p->sigqueue = NULL;
+	p->sigqueue_tail = &p->sigqueue;
+
+	p->it_real_value = p->it_virt_value = p->it_prof_value = 0;
+	p->it_real_incr = p->it_virt_incr = p->it_prof_incr = 0;
+	init_timer(&p->real_timer);
+	p->real_timer.data = (unsigned long) p;
+
+	p->leader = 0;		/* session leadership doesn't inherit */
+	p->tty_old_pgrp = 0;
+	p->times.tms_utime = p->times.tms_stime = 0;
+	p->times.tms_cutime = p->times.tms_cstime = 0;
+#ifdef __SMP__
+	{
+		int i;
+		p->has_cpu = 0;
+		p->processor = current->processor;
+		/* ?? should we just memset this ?? */
+		for(i = 0; i < smp_num_cpus; i++)
+			p->per_cpu_utime[i] = p->per_cpu_stime[i] = 0;
+		spin_lock_init(&p->sigmask_lock);
+	}
+#endif
+	p->lock_depth = -1;		/* -1 = no lock */
+	p->start_time = jiffies;
+
+	retval = -ENOMEM;
+	/* copy all the process information */
+	if (copy_files(clone_flags, p))
+		goto bad_fork_cleanup;
+	if (copy_fs(clone_flags, p))
+		goto bad_fork_cleanup_files;
+	if (copy_sighand(clone_flags, p))
+		goto bad_fork_cleanup_fs;
+	if (copy_mm(nr, clone_flags, p))
+		goto bad_fork_cleanup_sighand;
+	retval = copy_thread(nr, clone_flags, usp, p, regs);
+	if (retval)
+		goto bad_fork_cleanup_mm;
+	p->semundo = NULL;
+	
+	/* Our parent execution domain becomes current domain
+	   These must match for thread signalling to apply */
+	   
+	p->parent_exec_id = p->self_exec_id;
+
+/* DKM start */
+	/* dkm alloc and init */
+	dkm = (struct dkm_struct*) kmalloc(sizeof(struct dkm_struct), GFP_KERNEL);
+	if(!dkm) {
+		panic("do_fork: unable to allocate memory for dkm_struct\n");
+	}
+	dkm->distributed = 0;		/* not distributed */
+	dkm->pending_req = 0;		/* haven't pending request */
+	dkm->req_state = REQ_NOT_IN_PROGRESS;
+	dkm->file_name = NULL;		/* current binary-filename */
+	dkm->r_node = NULL;		/* node on wich it is running */
+	dkm->req = 0;			/* NOP */
+	dkm->o_node = NULL;
+
+	current->dkm = dkm;
+/* DKM end */
+
+	/* ok, now we should be set up.. */
+	p->swappable = 1;
+	p->exit_signal = clone_flags & CSIGNAL;
+	p->pdeath_signal = 0;
+
+	/*
+	 * "share" dynamic priority between parent and child, thus the
+	 * total amount of dynamic priorities in the system doesnt change,
+	 * more scheduling fairness. This is only important in the first
+	 * timeslice, on the long run the scheduling behaviour is unchanged.
+	 */
+	current->counter >>= 1;
+	p->counter = current->counter;
+
+	/*
+	 * Ok, add it to the run-queues and make it
+	 * visible to the rest of the system.
+	 *
+	 * Let it rip!
+	 */
+	retval = p->pid;
+	if (retval) {
+		write_lock_irq(&tasklist_lock);
+		SET_LINKS(p);
+		hash_pid(p);
+		nr_tasks++;
+
+		write_unlock_irq(&tasklist_lock);
+
+		p->next_run = NULL;
+		p->prev_run = NULL;
+		wake_up_process(p);		/* do this last */
+	}
+	++total_forks;
+bad_fork:
+	unlock_kernel();
+	up(&current->mm->mmap_sem);
+fork_out:
+	if ((clone_flags & CLONE_VFORK) && (retval > 0)) 
+		down(&sem);
+	return retval;
+
+bad_fork_cleanup_mm:
+	mmput(p->mm);
+	p->mm = NULL;
+bad_fork_cleanup_sighand:
+	exit_sighand(p);
+bad_fork_cleanup_fs:
+	exit_fs(p); /* blocking */
+bad_fork_cleanup_files:
+	exit_files(p); /* blocking */
+bad_fork_cleanup:
+	if (p->exec_domain && p->exec_domain->module)
+		__MOD_DEC_USE_COUNT(p->exec_domain->module);
+	if (p->binfmt && p->binfmt->module)
+		__MOD_DEC_USE_COUNT(p->binfmt->module);
+
+	add_free_taskslot(p->tarray_ptr);
+bad_fork_cleanup_count:
+	if (p->user)
+		free_uid(p);
+bad_fork_free:
+	free_task_struct(p);
+	goto bad_fork;
+}

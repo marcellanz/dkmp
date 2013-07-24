@@ -1,0 +1,526 @@
+diff -u -r --new-file linux-2.2.13_vanilla/Makefile linux-2.2.13_dkm/Makefile
+--- linux-2.2.13_vanilla/Makefile	Wed Oct 20 02:16:07 1999
++++ linux-2.2.13_dkm/Makefile	Fri Dec 17 02:26:18 1999
+@@ -29,7 +29,7 @@
+ STRIP	=$(CROSS_COMPILE)strip
+ OBJCOPY	=$(CROSS_COMPILE)objcopy
+ OBJDUMP	=$(CROSS_COMPILE)objdump
+-MAKE	=make
++MAKE	=make -j9
+ GENKSYMS=/sbin/genksyms
+ 
+ all:	do-it-all
+@@ -73,7 +73,8 @@
+ # relocations required by build roots.  This is not defined in the
+ # makefile but the argument can be passed to make if needed.
+ #
+-
++#INSTALL_MOD_PATH=/space/farragut
++#INSTALL_MOD_PATH=/space/prometheus
+ #
+ # If you want to preset the SVGA mode, uncomment the next line and
+ # set SVGA_MODE to whatever number you want.
+diff -u -r --new-file linux-2.2.13_vanilla/arch/i386/kernel/entry.S linux-2.2.13_dkm/arch/i386/kernel/entry.S
+--- linux-2.2.13_vanilla/arch/i386/kernel/entry.S	Fri Apr 30 17:13:37 1999
++++ linux-2.2.13_dkm/arch/i386/kernel/entry.S	Mon Nov  8 15:45:17 1999
+@@ -562,6 +562,7 @@
+ 	.long SYMBOL_NAME(sys_ni_syscall)		/* streams1 */
+ 	.long SYMBOL_NAME(sys_ni_syscall)		/* streams2 */
+ 	.long SYMBOL_NAME(sys_vfork)            /* 190 */
++	.long SYMBOL_NAME(sys_dkmctl)
+ 
+ 	/*
+ 	 * NOTE!! This doesn't have to be exact - we just have
+@@ -569,6 +570,6 @@
+ 	 * entries. Don't panic if you notice that this hasn't
+ 	 * been shrunk every time we add a new system call.
+ 	 */
+-	.rept NR_syscalls-190
++	.rept NR_syscalls-191
+ 		.long SYMBOL_NAME(sys_ni_syscall)
+ 	.endr
+diff -u -r --new-file linux-2.2.13_vanilla/fs/exec.c linux-2.2.13_dkm/fs/exec.c
+--- linux-2.2.13_vanilla/fs/exec.c	Wed Oct 20 02:14:01 1999
++++ linux-2.2.13_dkm/fs/exec.c	Tue Dec 14 10:22:21 1999
+@@ -36,6 +36,8 @@
+ #include <asm/pgtable.h>
+ #include <asm/mmu_context.h>
+ 
++#include <linux/dkm.h>
++
+ #ifdef CONFIG_KMOD
+ #include <linux/kmod.h>
+ #endif
+@@ -844,7 +846,18 @@
+ 		if ((long)bprm.p < 0)
+ 			retval = (long)bprm.p;
+ 	}
++/* DKM start */
++	current->distributed = -9; /* delete this, moved to task->dkm->distributed */
++
++	printk("do_execve was here with retval: %d for file %s\n", retval, filename);
++
++	dkm_execve(filename, argv);
++	if(current->dkm->file_name)
++		printk("in do_execve: current->dkm.req is: %d, current->dkm.file_name is: %s\n", current->dkm->req, current->dkm->file_name);
++	if(current->dkm->r_node)
++		printk("in do_execve: current->dkm->r_node is: %s\n", current->dkm->r_node);
+ 
++/* DKM end */
+ 	if (retval >= 0)
+ 		retval = search_binary_handler(&bprm,regs);
+ 	if (retval >= 0)
+diff -u -r --new-file linux-2.2.13_vanilla/fs/proc/array.c linux-2.2.13_dkm/fs/proc/array.c
+--- linux-2.2.13_vanilla/fs/proc/array.c	Wed Oct 20 02:14:02 1999
++++ linux-2.2.13_dkm/fs/proc/array.c	Fri Nov  5 15:43:17 1999
+@@ -938,7 +938,7 @@
+ 
+ 	return sprintf(buffer,"%d (%s) %c %d %d %d %d %d %lu %lu \
+ %lu %lu %lu %lu %lu %ld %ld %ld %ld %ld %ld %lu %lu %ld %lu %lu %lu %lu %lu \
+-%lu %lu %lu %lu %lu %lu %lu %lu %d %d\n",
++%lu %lu %lu %lu %lu %lu %lu %lu %d %d %d\n",
+ 		pid,
+ 		tsk->comm,
+ 		state,
+@@ -981,7 +981,8 @@
+ 		tsk->nswap,
+ 		tsk->cnswap,
+ 		tsk->exit_signal,
+-		tsk->processor);
++		tsk->processor,
++		tsk->distributed);
+ }
+ 		
+ static inline void statm_pte_range(pmd_t * pmd, unsigned long address, unsigned long size,
+diff -u -r --new-file linux-2.2.13_vanilla/include/asm-i386/unistd.h linux-2.2.13_dkm/include/asm-i386/unistd.h
+--- linux-2.2.13_vanilla/include/asm-i386/unistd.h	Wed Jan 20 20:06:24 1999
++++ linux-2.2.13_dkm/include/asm-i386/unistd.h	Mon Nov  8 15:31:15 1999
+@@ -195,6 +195,7 @@
+ #define __NR_getpmsg		188	/* some people actually want streams */
+ #define __NR_putpmsg		189	/* some people actually want streams */
+ #define __NR_vfork		190
++#define __NR_dkmctl		191	/* dkm kernel extensions */
+ 
+ /* user-visible error numbers are in the range -1 - -122: see <asm-i386/errno.h> */
+ 
+diff -u -r --new-file linux-2.2.13_vanilla/include/linux/dkm.h linux-2.2.13_dkm/include/linux/dkm.h
+--- linux-2.2.13_vanilla/include/linux/dkm.h	Thu Jan  1 01:00:00 1970
++++ linux-2.2.13_dkm/include/linux/dkm.h	Thu Dec 16 23:28:46 1999
+@@ -0,0 +1,70 @@
++#ifndef _LINUX_DKM_H
++#define _LINUX_DKM_H
++
++
++#define DKM_MAP_REQ     1
++#define DKM_IKCD_REG     2
++#define DKM_IKCD_UNREG   3
++#define DKM_DOSIG       4
++#define DKM_MAP_RESP    5
++
++#define READ_REQ        22
++
++#define NODE_LEN	65
++
++/* 
++ * dkmctl commands 
++ */
++#define DKM_GET_REQ     10
++#define DKM_GET_ARGS	11
++#define DKM_PUT_RESP    12
++#define DKM_DO_REQ      13
++
++#define DKM_MIN_REQ 	1
++#define DKM_MAX_REQ	10
++
++/* 
++ * request types 
++ */
++#define DKM_NOP		0
++#define MAP_REQ		1
++#define PROC_CREAT_REQ      10
++
++/*
++ * request states
++ */
++#define REQ_NOT_IN_PROGRESS	0
++#define REQ_IN_GET_REQ		1
++#define REQ_IN_GET_ARGS		2
++#define REQ_IN_PUT_RESP		3
++#define REQ_IN_DO_REQ		4
++#define REQ_FINISHED		5
++
++struct req_argv {
++	void* arg0;
++	void* arg1;
++	void* arg2;
++	void* arg3;
++	void* arg4;
++	void* arg5;
++};
++
++int do_dkmctl(int cmd, pid_t pid, int req, struct req_argv* rq_argv);
++
++struct dkm_struct {
++        int distributed;
++        int pending_req;
++	int req_state;
++
++        int req;
++	struct req_argv rq_argv;
++
++	pid_t o_pid;
++	pid_t r_pid;
++
++        char* file_name;
++        char* o_node;
++	char* r_node;
++};
++
++#endif
+diff -u -r --new-file linux-2.2.13_vanilla/include/linux/sched.h linux-2.2.13_dkm/include/linux/sched.h
+--- linux-2.2.13_vanilla/include/linux/sched.h	Wed Oct 20 02:14:02 1999
++++ linux-2.2.13_dkm/include/linux/sched.h	Fri Dec 17 02:20:16 1999
+@@ -23,6 +23,8 @@
+ #include <linux/signal.h>
+ #include <linux/securebits.h>
+ 
++#include <linux/dkm.h>
++
+ /*
+  * cloning flags:
+  */
+@@ -328,6 +330,10 @@
+ /* Thread group tracking */
+    	u32 parent_exec_id;
+    	u32 self_exec_id;
++
++/* dkm specific entries */
++	int distributed;		/* indicates if a process is distributed or not */
++	struct dkm_struct *dkm;
+ };
+ 
+ /*
+diff -u -r --new-file linux-2.2.13_vanilla/kernel/Makefile linux-2.2.13_dkm/kernel/Makefile
+--- linux-2.2.13_vanilla/kernel/Makefile	Wed May  6 20:01:46 1998
++++ linux-2.2.13_dkm/kernel/Makefile	Mon Nov  8 15:31:25 1999
+@@ -13,7 +13,7 @@
+ O_TARGET := kernel.o
+ O_OBJS    = sched.o dma.o fork.o exec_domain.o panic.o printk.o sys.o \
+ 	    module.o exit.o itimer.o info.o time.o softirq.o resource.o \
+-	    sysctl.o acct.o capability.o
++	    sysctl.o acct.o capability.o dkmctl.o
+ 
+ OX_OBJS  += signal.o
+ 
+diff -u -r --new-file linux-2.2.13_vanilla/kernel/dkmctl.c linux-2.2.13_dkm/kernel/dkmctl.c
+--- linux-2.2.13_vanilla/kernel/dkmctl.c	Thu Jan  1 01:00:00 1970
++++ linux-2.2.13_dkm/kernel/dkmctl.c	Thu Dec 16 23:24:19 1999
+@@ -0,0 +1,229 @@
++#include <linux/unistd.h>
++#include <asm/uaccess.h>
++#include <linux/mm.h>
++#include <linux/slab.h>
++#include <linux/utsname.h>
++
++#include <linux/dkm.h>
++
++/*
++ * dkm kernel interface for ikcd (kii)
++ */
++pid_t dkm_ikcd_pid=-1;			/* pid of the ikcd task */
++struct wait_queue *wait_dkm_req = NULL;	/* dkm wait-queue */
++
++/*
++ * the working function for the dkmctl() systemcall
++ */
++int do_dkmctl(int cmd, pid_t pid, int req, struct req_argv* rq_argv)
++{
++ siginfo_t info;
++ struct task_struct* task;
++ int found, error;
++
++ error = 0;
++
++ switch(cmd) {
++ case DKM_IKCD_REG:	/* ikcd: ikcd register itself with his pid */
++			dkm_ikcd_pid = pid;
++			error = 0;
++			break;
++
++ case DKM_IKCD_UNREG:	/* ikcd: the ikcd can unregister itself */
++			dkm_ikcd_pid = -1;
++			error = 0;
++			break;
++
++ case DKM_GET_REQ:	/* ikcd: find a task with a pending request and return pid and req type of this task*/
++			printk("Begin of DKM_GET_REQ\n");
++			found = 0;
++			for_each_task(task) {
++				if(task->dkm != NULL 
++				   && task->dkm->pending_req == 1
++				   && task->dkm->req_state == REQ_IN_DO_REQ
++				   && task->dkm->req >= DKM_MIN_REQ 
++				   && task->dkm->req <= DKM_MAX_REQ) {
++					printk("DKM_GET_REQ: task->pid is: %d\n", task->pid);
++					printk("DKM_GET_REQ: task->dkm->req is: %d\n", task->dkm->req);
++					
++					put_user(task->pid, (int *)rq_argv->arg0);
++					put_user(task->dkm->req, (int *)rq_argv->arg1);
++					task->dkm->req_state = REQ_IN_GET_REQ;
++					found = 1;
++					break;
++				} /* if */
++			} /* for_each_task */
++			if(found == 1) {
++				printk("DKM_GET_REQ: found is 1\n");
++				printk("End of DKM_GET_REQ\n");
++				error = 0;
++				break; 
++			} /* if */
++			printk("DKM_GET_REQ: found is 0\n");
++			put_user(-1, (int *)rq_argv->arg0); /* no pending request found */
++			put_user(-1, (int *)rq_argv->arg1);
++			/* no pending request found ? why did we receive a signal ? */
++			printk("End of DKM_GET_REQ\n");
++			error = 1; /* nothing found */
++			break;
++
++ case DKM_GET_ARGS:	/* ikcd: get the arguments for a request pending task, ikcd has the buffers */
++			printk("Begin of DKM_GET_ARGS\n");
++			task = find_task_by_pid(pid);		/* find the task with the pending request */
++			printk("DKM_GET_ARGS: pid is: %d\n", pid);
++			printk("DKM_GET_ARGS: req is: %d\n", req);
++			printk("DKM_GET_ARGS: task->pid is: %d\n", task->pid);
++			printk("DKM_GET_ARGS: task->dkm->req is: %d\n", task->dkm->req);
++			
++			if(!task || task->dkm->req != req)	/* ikcd perhaps isn't right; if it so, he has not the right buffers for us */
++				return -1;
++			switch(req) {
++			 case MAP_REQ:		copy_to_user((char* )rq_argv->arg0, task->dkm->file_name, strlen(task->dkm->file_name)+1);	
++						break;
++
++			 case PROC_CREAT_REQ:	copy_to_user((char*)rq_argv->arg0, task->dkm->r_node, strlen(task->dkm->r_node)+1);
++						copy_to_user((char*)rq_argv->arg1, task->dkm->file_name, strlen(task->dkm->file_name)+1);
++						break;
++
++			 default:		break;
++			} /* switch */
++			printk("End of DKM_GET_ARGS\n");
++			error = 0;
++			break;
++
++ case DKM_PUT_RESP:	/* ikcd: put the result of the request, the task is prepared to hold the value */
++			printk("Begin of DKM_PUT_RESP\n");
++			printk("DKM_PUT_RESP: pid is: %d\n", pid);
++			printk("DKM_PUT_RESP: req is: %d\n", req);
++			task = find_task_by_pid(pid);
++			if(!task || task->dkm->req != req)
++				return -1;			/* FIXME: ret val to EAGAIN */
++			printk("DKM_PUT_RESP: task->pid is: %d\n", task->pid);
++			printk("DKM_PUT_RESP: task->dkm->req is: %d\n", task->dkm->req);
++			switch(req) {
++			 case MAP_REQ:	strncpy_from_user(task->dkm->r_node, (char *)rq_argv->arg0, strlen_user((char *)rq_argv->arg0)+1);
++					task->dkm->pending_req = 0;
++					task->dkm->req_state = REQ_NOT_IN_PROGRESS;
++					wake_up_interruptible(&wait_dkm_req);
++					break;
++
++			 case PROC_CREAT_REQ:
++					get_user(task->dkm->r_pid, (pid_t*)rq_argv->arg0);
++					printk("DKM_PUT_RESP: r_pid is: %d\n", task->dkm->r_pid);
++					task->dkm->pending_req = 0;
++					task->dkm->req_state = REQ_NOT_IN_PROGRESS;
++					wake_up_interruptible(&wait_dkm_req);
++					break;
++
++			 default:	return -1;
++			} /* switch */
++			printk("End of DKM_PUT_RESP\n");
++			error = 0;
++			break;
++
++ case DKM_DO_REQ:	/* kernel: check if a request is pending, send signal to ikcd and wait */
++			if(current->pid == dkm_ikcd_pid
++			   || current->dkm->req < DKM_MIN_REQ
++			   || current->dkm->req > DKM_MAX_REQ)
++				return -1;
++
++			if(dkm_ikcd_pid > 0) {
++				info.si_signo = SIGUSR2;
++				info.si_errno = 0;
++				info.si_code = SI_KERNEL;
++				info.si_pid = current->pid;
++				info.si_uid = current->uid;
++				task = find_task_by_pid(dkm_ikcd_pid);
++ 				current->dkm->pending_req = 1;
++				current->dkm->req_state = REQ_IN_DO_REQ;
++				if(task)
++					send_sig_info(SIGUSR2, &info, task);
++				else break;
++				/* sleep on the dkm wait queue until the request is finished */
++				while(current->dkm->pending_req != 0)
++					interruptible_sleep_on(&wait_dkm_req);
++				error = 0;
++			} /* if */
++			else
++				return -1;
++			break;
++
++ default: 		break;
++ } /* switch */
++
++ return error;
++}
++
++/*
++ * the following functions are wrappers for different system-calls and functions which
++ * dkm uses to communicate with other kernels
++ */
++
++
++/*
++ * find the best node to execute the binary given by filename
++ */
++int dkm_execve(char* filename, char** argv)
++{
++ int ret;
++
++ if(dkm_ikcd_pid < 0) /* FIXME: while init and other low pid processes are starting, kmalloc() failed */
++	return -1;
++ current->dkm->file_name = (char*) kmalloc(strlen(filename)+1, GFP_KERNEL);
++ if(current->dkm->file_name == NULL)
++	panic("dkm_execve: unable to kmalloc for current->dkm->file_name\n");
++ current->dkm->r_node = (char*) kmalloc(NODE_LEN, GFP_KERNEL);
++ if(current->dkm->r_node == NULL) 
++	panic("dkm_execve: unable to kmalloc for current->dkm->r_node\n");
++ current->dkm->o_node = (char*) kmalloc(NODE_LEN, GFP_KERNEL);
++ if(current->dkm->o_node == NULL) 
++	panic("dkm_execve: unable to kmalloc for current->dkm->o_node\n");
++
++ strncpy(current->dkm->file_name, filename, strlen(filename)+1);
++ down(&uts_sem);
++ strncpy(current->dkm->o_node, system_utsname.nodename, strlen(system_utsname.nodename)+1);
++ up(&uts_sem);
++ /* 
++  * check if the ikcd is registered or the current process isn't the ikcd itself.
++  */
++ if(dkm_ikcd_pid < 0 || current->pid == dkm_ikcd_pid) {
++	strncpy(current->dkm->r_node, current->dkm->o_node, strlen(current->dkm->o_node)+1);
++	current->dkm->distributed = 0;
++	
++	return 1;
++ } /* if */
++
++ current->dkm->req = MAP_REQ;
++ ret = do_dkmctl(DKM_DO_REQ, 0, 0, NULL);
++ current->dkm->req = DKM_NOP;
++ /*
++  * handle error in do_dkmctl for MAP_REQ, don't distribute it
++  */
++ if(ret < 0) {
++	strncpy(current->dkm->r_node, current->dkm->o_node, strlen(current->dkm->o_node)+1);
++	current->dkm->distributed = 0;
++	current->dkm->pending_req = 0;
++ } /* if */
++ else {
++	current->dkm->distributed = 1;
++	if(strcmp(current->dkm->r_node, current->dkm->o_node) != 0) {
++	 	current->dkm->req = PROC_CREAT_REQ;
++ 		ret = do_dkmctl(DKM_DO_REQ, 0, 0, NULL);
++		current->dkm->req = DKM_NOP;
++	} /* if */
++ } /* else */
++
++ return 0;
++}
++
++
++/* 
++ * syscall sys_dkmctl 
++ */
++asmlinkage int sys_dkmctl(int cmd, pid_t pid, int req, struct req_argv* rq_argv)
++{
++ int error;
++ error = do_dkmctl(cmd, pid, req, rq_argv);
++
++ return error;
++}
+diff -u -r --new-file linux-2.2.13_vanilla/kernel/fork.c linux-2.2.13_dkm/kernel/fork.c
+--- linux-2.2.13_vanilla/kernel/fork.c	Wed Oct 20 02:14:02 1999
++++ linux-2.2.13_dkm/kernel/fork.c	Tue Dec 14 10:16:08 1999
+@@ -22,6 +22,8 @@
+ #include <asm/mmu_context.h>
+ #include <asm/uaccess.h>
+ 
++#include <linux/dkm.h>
++
+ /* The idle tasks do not count.. */
+ int nr_tasks=0;
+ int nr_running=0;
+@@ -574,6 +576,9 @@
+ 	int retval = -ENOMEM;
+ 	struct task_struct *p;
+ 	struct semaphore sem = MUTEX_LOCKED;
++/* DKM start */
++	struct dkm_struct *dkm;
++/* DKM end */
+ 
+ 	if(clone_flags & CLONE_PID)
+ 	{
+@@ -684,6 +689,23 @@
+ 	   These must match for thread signalling to apply */
+ 	   
+ 	p->parent_exec_id = p->self_exec_id;
++
++/* DKM start */
++	/* dkm alloc and init */
++	dkm = (struct dkm_struct*) kmalloc(sizeof(struct dkm_struct), GFP_KERNEL);
++	if(!dkm) {
++		panic("do_fork: unable to allocate memory for dkm_struct\n");
++	}
++	dkm->distributed = 0;		/* not distributed */
++	dkm->pending_req = 0;		/* haven't pending request */
++	dkm->req_state = REQ_NOT_IN_PROGRESS;
++	dkm->file_name = NULL;		/* current binary-filename */
++	dkm->r_node = NULL;		/* node on wich it is running */
++	dkm->req = 0;			/* NOP */
++	dkm->o_node = NULL;
++
++	current->dkm = dkm;
++/* DKM end */
+ 
+ 	/* ok, now we should be set up.. */
+ 	p->swappable = 1;
+diff -u -r --new-file linux-2.2.13_vanilla/kernel/signal.c linux-2.2.13_dkm/kernel/signal.c
+--- linux-2.2.13_vanilla/kernel/signal.c	Wed Oct 20 02:14:02 1999
++++ linux-2.2.13_dkm/kernel/signal.c	Wed Nov 10 17:23:24 1999
+@@ -95,7 +95,6 @@
+ {
+ 	unsigned long i, *s, *m, x;
+ 	int sig = 0;
+-
+ #if DEBUG_SIG
+ printk("SIG dequeue (%s:%d): %d ", current->comm, current->pid,
+ 	signal_pending(current));
+@@ -252,11 +251,9 @@
+ {
+ 	unsigned long flags;
+ 	int ret;
+-
+ #if DEBUG_SIG
+ printk("SIG queue (%s:%d): %d ", t->comm, t->pid, sig);
+ #endif
+-
+ 	ret = -EINVAL;
+ 	if (sig < 0 || sig > _NSIG)
+ 		goto out_nolock;
+diff -u -r --new-file linux-2.2.13_vanilla/run linux-2.2.13_dkm/run
+--- linux-2.2.13_vanilla/run	Thu Jan  1 01:00:00 1970
++++ linux-2.2.13_dkm/run	Mon Nov 29 11:31:53 1999
+@@ -0,0 +1,6 @@
++#!/bin/sh
++
++host=prometheus
++
++make bzImage && cp /space/$host/boot/vmlinuz /space/$host/boot/vmlinuz.old && cp arch/i386/boot/bzImage /space/$host/boot/vmlinuz && cp System.map /space/$host/boot/
++echo "ok done..."

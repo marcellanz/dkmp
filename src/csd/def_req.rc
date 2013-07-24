@@ -1,0 +1,6 @@
+.mem.total
+.mem.used
+.mem.free
+.load.avg15
+.load.avg5
+.load.avg1

@@ -1,0 +1,37 @@
+/*
+ *
+ * DKM: Zur Dokumentation werden nur die modifizierten Elemente ausgedruckt.
+ *
+ */
+
+.data
+ENTRY(sys_call_table)
+	.long SYMBOL_NAME(sys_ni_syscall)	/* 0  -  old "setup()" system call*/
+	.long SYMBOL_NAME(sys_exit)
+	.long SYMBOL_NAME(sys_fork)
+	.long SYMBOL_NAME(sys_read)
+
+/* für die Dokumentation gekürzt */
+
+	.long SYMBOL_NAME(sys_pread)		/* 180 */
+	.long SYMBOL_NAME(sys_pwrite)
+	.long SYMBOL_NAME(sys_chown)
+	.long SYMBOL_NAME(sys_getcwd)
+	.long SYMBOL_NAME(sys_capget)
+	.long SYMBOL_NAME(sys_capset)           /* 185 */
+	.long SYMBOL_NAME(sys_sigaltstack)
+	.long SYMBOL_NAME(sys_sendfile)
+	.long SYMBOL_NAME(sys_ni_syscall)		/* streams1 */
+	.long SYMBOL_NAME(sys_ni_syscall)		/* streams2 */
+	.long SYMBOL_NAME(sys_vfork)            /* 190 */
+	.long SYMBOL_NAME(sys_dkmctl)
+
+	/*
+	 * NOTE!! This doesn't have to be exact - we just have
+	 * to make sure we have _enough_ of the "sys_ni_syscall"
+	 * entries. Don't panic if you notice that this hasn't
+	 * been shrunk every time we add a new system call.
+	 */
+	.rept NR_syscalls-191
+		.long SYMBOL_NAME(sys_ni_syscall)
+	.endr

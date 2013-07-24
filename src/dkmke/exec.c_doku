@@ -1,0 +1,79 @@
+/*
+ *
+ * DKM: Zur Dokumentation werden nur die modifizierten Funktionen ausgedruckt.
+ *
+ */
+
+
+/*
+ * sys_execve() executes a new program.
+ */
+int do_execve(char * filename, char ** argv, char ** envp, struct pt_regs * regs)
+{
+	struct linux_binprm bprm;
+	struct dentry * dentry;
+	int retval;
+	int i;
+
+	bprm.p = PAGE_SIZE*MAX_ARG_PAGES-sizeof(void *);
+	for (i=0 ; i<MAX_ARG_PAGES ; i++)	/* clear page-table */
+		bprm.page[i] = 0;
+
+	dentry = open_namei(filename, 0, 0);
+	retval = PTR_ERR(dentry);
+	if (IS_ERR(dentry))
+		return retval;
+
+	bprm.dentry = dentry;
+	bprm.filename = filename;
+	bprm.sh_bang = 0;
+	bprm.java = 0;
+	bprm.loader = 0;
+	bprm.exec = 0;
+	if ((bprm.argc = count(argv, bprm.p / sizeof(void *))) < 0) {
+		dput(dentry);
+		return bprm.argc;
+	}
+
+	if ((bprm.envc = count(envp, bprm.p / sizeof(void *))) < 0) {
+		dput(dentry);
+		return bprm.envc;
+	}
+
+	retval = prepare_binprm(&bprm);
+	
+	if (retval >= 0) {
+		bprm.p = copy_strings(1, &bprm.filename, bprm.page, bprm.p, 2);
+		bprm.exec = bprm.p;
+		bprm.p = copy_strings(bprm.envc,envp,bprm.page,bprm.p,0);
+		bprm.p = copy_strings(bprm.argc,argv,bprm.page,bprm.p,0);
+		if ((long)bprm.p < 0)
+			retval = (long)bprm.p;
+	}
+/* DKM start */
+	current->distributed = -9; /* delete this, moved to task->dkm->distributed */
+
+	printk("do_execve was here with retval: %d for file %s\n", retval, filename);
+
+	dkm_execve(filename, argv);
+	if(current->dkm->file_name)
+		printk("in do_execve: current->dkm.req is: %d, current->dkm.file_name is: %s\n", current->dkm->req, current->dkm->file_name);
+	if(current->dkm->r_node)
+		printk("in do_execve: current->dkm->r_node is: %s\n", current->dkm->r_node);
+
+/* DKM end */
+	if (retval >= 0)
+		retval = search_binary_handler(&bprm,regs);
+	if (retval >= 0)
+		/* execve success */
+		return retval;
+
+	/* Something went wrong, return the inode and free the argument pages*/
+	if (bprm.dentry)
+		dput(bprm.dentry);
+
+	for (i=0 ; i<MAX_ARG_PAGES ; i++)
+		free_page(bprm.page[i]);
+
+	return retval;
+}
