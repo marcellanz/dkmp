@@ -1,0 +1,57 @@
+%TGIF 3.0-p12
+state(0,33,100.000,0,0,0,16,1,9,1,1,0,0,0,0,1,0,'Courier',0,10,0,0,0,10,0,0,1,1,0,16,0,0,1,1,1,0,1088,1408,0,0,2880).
+%
+% @(#)$Header$
+% %W%
+%
+unit("1 pixel/pixel").
+color_info(11,65535,0,[
+	"magenta", 65535, 0, 65535, 65535, 0, 65535, 1,
+	"red", 65535, 0, 0, 65535, 0, 0, 1,
+	"green", 0, 65535, 0, 0, 65535, 0, 1,
+	"blue", 0, 0, 65535, 0, 0, 65535, 1,
+	"yellow", 65535, 65535, 0, 65535, 65535, 0, 1,
+	"pink", 65535, 49931, 53052, 65535, 49344, 52171, 1,
+	"cyan", 0, 65535, 65535, 0, 65535, 65535, 1,
+	"CadetBlue", 22885, 40569, 42649, 24415, 40606, 41120, 1,
+	"white", 65535, 65535, 65535, 65535, 65535, 65535, 1,
+	"black", 0, 0, 0, 0, 0, 0, 1,
+	"DarkSlateGray", 10402, 19764, 18724, 12079, 20303, 20303, 1
+]).
+page(1,"",1).
+text('black',64,32,'Courier',0,10,35,0,0,1,498,385,2,0,9,2,0,0,0,0,0,2,0,0,0,0,"",0,0,0,[
+	".alive.prometheus.loadavg15=0.65",
+	".alive.prometheus.loadavg5=0.19",
+	".alive.prometheus.loadavg1=0.00",
+	".alive.defiant.loadavg15=0.06",
+	".alive.defiant.loadavg5=0.14",
+	".alive.defiant.loadavg1=0.27",
+	".app./usr/local/bin/gears.capnodes=defiant",
+	".app./usr/local/bin/gears.lib=libGL.so.1 libMesaGLU.so.3 libpthread.so.0 lic.so.6",
+	".app./bin/sh.capnodes=prometheus defiant",
+	".app./bin/sh.lib=libncurses.so.4 libdl.so.2 libc.so.6 ld-linux.so.2",
+	".config.def_db_req=.mem.total .mem.used .mem.free .load.avg15 .load.avg5 .load.avg1",
+	".node.prometheus.load.avg1=0.00",
+	".node.prometheus.load.avg5=0.19",
+	".node.prometheus.load.avg15=0.65",
+	".node.prometheus.mem.free=44253184",
+	".node.prometheus.mem.used=20525056",
+	".node.prometheus.mem.total=64778240",
+	".node.defiant.cpu.nrcpu=2",
+	".node.defiant.cpu.1.idle=674104",
+	".node.defiant.cpu.1.sys=20334",
+	".node.defiant.cpu.1.nice=0",
+	".node.defiant.cpu.1.user=28355",
+	".node.defiant.cpu.0.idle=673338",
+	".node.defiant.cpu.0.sys=20813",
+	".node.defiant.cpu.0.nice=0",
+	".node.defiant.cpu.0.user=28642",
+	".node.defiant.cpu.all.idle=1347442",
+	".node.defiant.cpu.all.sys=41147",
+	".node.defiant.cpu.all.nice=0",
+	".node.defiant.cpu.all.user=56997",
+	".node.defiant.mem.swapfree=131579904",
+	".node.defiant.mem.swapused=20480",
+	".node.defiant.mem.swaptotal=131600384",
+	".node.defiant.mem.cached=85041152",
+	".node.defiant.mem.buffers=60575744"]).

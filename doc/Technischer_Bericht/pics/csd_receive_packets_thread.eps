@@ -1,0 +1,260 @@
+%!
+%%BoundingBox: 35 611 129 759
+%%Title: csd_receive_packets_thread
+%%CreationDate: Fri Dec 10 18:57:00 1999
+%%Creator: Tgif-3.0-p12 by William Chia-Wei Cheng (william@cs.UCLA.edu)
+
+/tgifdict 5 dict def
+tgifdict begin
+
+/tgifarrowtipdict 8 dict def
+tgifarrowtipdict /mtrx matrix put
+
+/tgifarrowtip
+ { tgifarrowtipdict begin
+      /dy exch def
+      /dx exch def
+      /h exch def
+      /w exch def
+      /y exch def
+      /x exch def
+      /savematrix mtrx currentmatrix def
+      x y translate
+      dy dx atan rotate
+      0 0 moveto
+      w neg h lineto
+      w neg h neg lineto
+      savematrix setmatrix
+   end
+ } def
+
+/tgifcentertext { dup stringwidth pop 2 div neg 0 rmoveto } def
+
+end
+
+%%PageBoundingBox: 35 611 129 759
+tgifdict begin
+/tgifsavedpage save def
+
+1 setmiterlimit
+1 setlinewidth
+
+0 setgray
+
+72 0 mul 72 11.00 mul translate
+72 128 div 100.000 mul 100 div dup neg scale
+
+gsave
+
+/tgiforigctm matrix currentmatrix def
+
+% BOX
+0 setgray
+gsave
+   10 setmiterlimit
+   gsave
+      newpath
+         86 196 moveto 214 196 lineto 214 248 lineto 86 248 lineto
+      closepath
+      stroke
+   grestore
+grestore
+
+% POLY/OPEN-SPLINE
+0 setgray
+gsave
+   newpath
+      144 106 moveto
+      32 0 atan dup cos 8.000 mul 144 exch sub
+      exch sin 8.000 mul 138 exch sub lineto
+   tgiforigctm setmatrix
+   1 setlinewidth
+   stroke
+grestore
+gsave
+   tgiforigctm setmatrix
+   newpath
+      144 138 8.000 3.000 0 32 tgifarrowtip
+   1 setgray closepath fill
+   0 setgray
+   newpath
+      144 138 8.000 3.000 0 32 tgifarrowtip
+   closepath fill
+grestore
+
+% POLY/OPEN-SPLINE
+0 setgray
+gsave
+   newpath
+      145 249 moveto
+      18 0 atan dup cos 8.000 mul 145 exch sub
+      exch sin 8.000 mul 267 exch sub lineto
+   tgiforigctm setmatrix
+   1 setlinewidth
+   stroke
+grestore
+gsave
+   tgiforigctm setmatrix
+   newpath
+      145 267 8.000 3.000 0 18 tgifarrowtip
+   1 setgray closepath fill
+   0 setgray
+   newpath
+      145 267 8.000 3.000 0 18 tgifarrowtip
+   closepath fill
+grestore
+
+% TEXT
+0 setgray
+/Courier findfont [10 0 0 -10 0 0] makefont setfont
+   gsave
+      220 244 moveto (3) tgifcentertext show
+   grestore
+
+% TEXT
+0 setgray
+/Courier findfont [10 0 0 -10 0 0] makefont setfont
+   gsave
+      224 304 moveto (4) tgifcentertext show
+   grestore
+
+% POLY/OPEN-SPLINE
+0 setgray
+gsave
+   newpath
+      145 304 moveto
+      145 320 lineto
+      65 320 lineto
+      65 117 lineto
+      0 80 atan dup cos 8.000 mul 145 exch sub
+      exch sin 8.000 mul 117 exch sub lineto
+   tgiforigctm setmatrix
+   1 setlinewidth
+   stroke
+grestore
+gsave
+   tgiforigctm setmatrix
+   newpath
+      145 117 8.000 3.000 80 0 tgifarrowtip
+   1 setgray closepath fill
+   0 setgray
+   newpath
+      145 117 8.000 3.000 80 0 tgifarrowtip
+   closepath fill
+grestore
+
+% BOX
+0 setgray
+gsave
+   10 setmiterlimit
+   gsave
+      newpath
+         81 60 moveto 209 60 lineto 209 104 lineto 81 104 lineto
+      closepath
+      stroke
+   grestore
+grestore
+
+% TEXT
+0 setgray
+/Courier findfont [10 0 0 -10 0 0] makefont setfont
+   gsave
+      95 76 moveto (allocate socket) show
+      95 87 moveto (and join multicast) show
+      95 98 moveto (group) show
+   grestore
+
+% TEXT
+0 setgray
+/Courier findfont [10 0 0 -10 0 0] makefont setfont
+   gsave
+      216 100 moveto (1) tgifcentertext show
+   grestore
+
+% POLY/OPEN-SPLINE
+0 setgray
+gsave
+   newpath
+      88 303 moveto
+      212 303 lineto
+      221 284 lineto
+      212 266 lineto
+      88 266 lineto
+      88 303 lineto
+   tgiforigctm setmatrix
+   1 setlinewidth
+   stroke
+grestore
+
+% TEXT
+0 setgray
+/Courier findfont [10 0 0 -10 0 0] makefont setfont
+   gsave
+      109 287 moveto (send response) show
+   grestore
+
+% POLY/OPEN-SPLINE
+0 setgray
+gsave
+   newpath
+      84 176 moveto
+      212 176 lineto
+      204 158 lineto
+      211 139 lineto
+      84 139 lineto
+      84 176 lineto
+   tgiforigctm setmatrix
+   1 setlinewidth
+   stroke
+grestore
+
+% TEXT
+0 setgray
+/Courier findfont [10 0 0 -10 0 0] makefont setfont
+   gsave
+      95 161 moveto (receive a packet) show
+   grestore
+
+% TEXT
+0 setgray
+/Courier findfont [10 0 0 -10 0 0] makefont setfont
+   gsave
+      95 210 moveto (detect packet type) show
+      95 221 moveto (parse the packet ) show
+      95 232 moveto (and proceed the ) show
+      95 243 moveto (request) show
+   grestore
+
+% TEXT
+0 setgray
+/Courier findfont [10 0 0 -10 0 0] makefont setfont
+   gsave
+      220 172 moveto (2) tgifcentertext show
+   grestore
+
+% POLY/OPEN-SPLINE
+0 setgray
+gsave
+   newpath
+      144 176 moveto
+      21 0 atan dup cos 8.000 mul 144 exch sub
+      exch sin 8.000 mul 197 exch sub lineto
+   tgiforigctm setmatrix
+   1 setlinewidth
+   stroke
+grestore
+gsave
+   tgiforigctm setmatrix
+   newpath
+      144 197 8.000 3.000 0 21 tgifarrowtip
+   1 setgray closepath fill
+   0 setgray
+   newpath
+      144 197 8.000 3.000 0 21 tgifarrowtip
+   closepath fill
+grestore
+
+grestore
+tgifsavedpage restore
+end
+%MatchingCreationDate: Fri Dec 10 18:57:00 1999
